@@ -7,6 +7,8 @@ from urllib.parse import unquote
 
 # self-defined modules
 from .constants import URL_ROOT
+from .constants import URL_GET_SEO_FEED
+from .constants import URL_GET_STORE_INFO
 from .constants import XPATH_CATEGORIES
 from .constants import XPATH_UUID_SCRIPT
 
@@ -39,17 +41,38 @@ class UbereatsSpider(scrapy.Spider):
 
         for category in all_category_paths:
             yield scrapy.Request(
-                url=f'{URL_ROOT}{category}',
-                callback=self.__get_all_menus_by_city_category)
+                url=URL_GET_SEO_FEED,
+                callback=self.__get_all_menus_by_city_and_category,
+                method='POST',
+                headers={
+                    'content-type': 'application/json',
+                    'x-csrf-token': 'x',
+                },
+                body=json.dumps({
+                    'pathname': category,
+                }))
 
-    def __get_all_menus_by_city_category(self, response):
-        uuids = self.__get_all_store_uuid(response)
-        for uuid in uuids:
-            yield {"uuid": uuid}
+    def __get_all_menus_by_city_and_category(self, response):
+        feeds = json.loads(response.text)
+
+        for item in feeds["data"]["elements"][4]["feedItems"]:
+            uuid = item["uuid"]
+            if uuid not in self.__store_uuid_seen:
+                self.__store_uuid_seen.add(uuid)
+                yield scrapy.Request(url=URL_GET_STORE_INFO,
+                                     callback=self.__get_store_info_by_uuid,
+                                     method='POST',
+                                     headers={
+                                         'content-type': 'application/json',
+                                         'x-csrf-token': 'x',
+                                     },
+                                     body=json.dumps({'storeUuid': uuid}))
+
+    def __get_store_info_by_uuid(self, response):
+        yield json.loads(response.text)
 
     def __get_all_category_paths(self, response):
-        """
-        The method returns a list of url paths of all categories scawled
+        """The method returns a list of url paths of all categories scawled
         from 'https://www.ubereats.com/city/{city_name}-{state_postal_abbr}'.
         
         Example return is 
@@ -58,9 +81,8 @@ class UbereatsSpider(scrapy.Spider):
         """
         return response.xpath(XPATH_CATEGORIES).getall()
 
-    def __get_all_store_uuid(self, response):
-        """
-        The method finds all store uuids encrypted in html script
+    def __get_all_store_uuids_from_script(self, response):
+        """The method finds all store uuids encrypted in html script
         (<script type="application/json" id="__REDUX_STATE__">) 
         on the page 'https://www.ubereats.com/category/{city_name}-{state_postal_abbr}/{category_name}'.
 
