@@ -1,9 +1,10 @@
 import scrapy
 import json
 import re
+import logging
 
 from pathlib import Path
-from urllib.parse import unquote
+from ..items import UbereatsCrawlerItem
 
 # self-defined modules
 from .constants import URL_ROOT
@@ -24,25 +25,26 @@ class UbereatsSpider(scrapy.Spider):
 
     def start_requests(self):
         # current dir is top level dir of the project
-        city_file = open('./major_cities.json', mode='r')
-        cities = json.load(city_file)
-        for state, cities in cities.items():
-            for city in cities:
-                yield scrapy.Request(url=f'{URL_ROOT}/city/{city}-{state}',
-                                     callback=self.__get_all_menus_by_city)
+        city_file = open('./major_cities.txt', mode='r')
+        for city in city_file:
+            yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
+                                 callback=self.__get_all_menus_by_city,
+                                 errback=self.__process_failed_request,
+                                 cb_kwargs={'city': f'{city}'})
 
     def parse(self, response):
         raise Exception(
             "No default callback parser! Please specify callback in each scrapy request."
         )
 
-    def __get_all_menus_by_city(self, response):
+    def __get_all_menus_by_city(self, response, city):
         all_category_paths = self.__get_all_category_paths(response)
 
         for category in all_category_paths:
             yield scrapy.Request(
                 url=URL_GET_SEO_FEED,
                 callback=self.__get_all_menus_by_city_and_category,
+                errback=self.__process_failed_request,
                 method='POST',
                 headers={
                     'content-type': 'application/json',
@@ -50,9 +52,10 @@ class UbereatsSpider(scrapy.Spider):
                 },
                 body=json.dumps({
                     'pathname': category,
-                }))
+                }),
+                cb_kwargs={'city': city})
 
-    def __get_all_menus_by_city_and_category(self, response):
+    def __get_all_menus_by_city_and_category(self, response, city):
         feeds = json.loads(response.text)
 
         for item in feeds["data"]["elements"][4]["feedItems"]:
@@ -60,16 +63,22 @@ class UbereatsSpider(scrapy.Spider):
             if uuid not in self.__store_uuid_seen:
                 self.__store_uuid_seen.add(uuid)
                 yield scrapy.Request(url=URL_GET_STORE_INFO,
-                                     callback=self.__get_store_info_by_uuid,
+                                     callback=self.__process_store_info,
+                                     errback=self.__process_failed_request,
                                      method='POST',
                                      headers={
                                          'content-type': 'application/json',
                                          'x-csrf-token': 'x',
                                      },
-                                     body=json.dumps({'storeUuid': uuid}))
+                                     body=json.dumps({'storeUuid': uuid}),
+                                     cb_kwargs={'city': city})
 
-    def __get_store_info_by_uuid(self, response):
-        yield json.loads(response.text)
+    def __process_store_info(self, response, city):
+        yield UbereatsCrawlerItem(city=city, content="some content here")
+
+    def __process_failed_request(self, failure):
+        self.log(f"Fail to request {failure.request.url}",
+                 level=logging.WARNING)
 
     def __get_all_category_paths(self, response):
         """The method returns a list of url paths of all categories scawled
