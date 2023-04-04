@@ -71,20 +71,28 @@ class UbereatsSpider(scrapy.Spider):
                                          'x-csrf-token': 'x',
                                      },
                                      body=json.dumps({'storeUuid': uuid}),
-                                     cb_kwargs={'label': label})
+                                     cb_kwargs={
+                                         'label': label,
+                                         'uuid': uuid
+                                     })
 
-    def __process_store_info(self, response, label):
-        data = json.loads(response.text)['data']
-        item = UbereatsCrawlerItem(
-            uuid=data['uuid'],
-            name=data['title'],
-            location=data['location'],
-            hours=data['hours'],
-            categories=data['categories'],
-            sections=data['sections'],
-            reviews=data['storeReviews'],
-            catalogSectionsMap=data['catalogSectionsMap'])
-        yield {'label': label, 'data': item}
+    def __process_store_info(self, response, label, uuid):
+        res = json.loads(response.text)
+
+        if res['status'] == 'failure':
+            yield {'label': 'failure', 'data': {'uuid': uuid}}
+        else:
+            data = res['data']
+            item = UbereatsCrawlerItem(
+                uuid=data['uuid'],
+                name=data['title'],
+                location=data['location'],
+                hours=data['hours'],
+                categories=data['categories'],
+                sections=data['sections'],
+                reviews=data['storeReviews'],
+                catalogSectionsMap=data['catalogSectionsMap'])
+            yield {'label': label, 'data': item}
 
     def __process_failed_request(self, failure):
         self.log(f"Fail to request {failure.request.url}",

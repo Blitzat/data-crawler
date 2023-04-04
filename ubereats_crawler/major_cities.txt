@@ -1,6 +1,1 @@
 berkeley-ca
-mountain-view-ca
-sunnyvale-ca
-philadelphia-pa
-new-york-city
-error_city
