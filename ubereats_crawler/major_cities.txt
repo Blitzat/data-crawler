@@ -1,5 +1,5 @@
 berkeley-ca
 mountain-view-ca
-sunnyvalue-ca
+sunnyvale-ca
 new-york-city
 philadelphia-pa
