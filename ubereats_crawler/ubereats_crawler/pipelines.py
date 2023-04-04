@@ -14,20 +14,23 @@ from datetime import datetime
 
 class UbereatsCrawlerPipeline:
 
-    # output dir for crawling this time
-    out_dir: str
-
     def __init__(self):
         self.files = {}
+        self.out_dir = None
 
     def open_spider(self, spider):
-        output_top_dir = os.path.join(os.getcwd(), "outputs")
-        if not os.path.exists(output_top_dir):
-            os.makedirs(output_top_dir)
+        if not hasattr(spider, 'OUTDIR'):
+            raise Exception(
+                "Must specify output directory by adding '-a OUTDIR=output_dir'"
+            )
 
-        time = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
-        self.out_dir = os.path.join(output_top_dir, time)
-        os.makedirs(self.out_dir)
+        self.out_dir = os.path.join(os.getcwd(), spider.OUTDIR)
+        if not os.path.exists(self.out_dir):
+            os.makedirs(self.out_dir)
+
+        # time = datetime.now().strftime(r"%Y-%m-%d %H:%M:%S")
+        # self.out_dir = os.path.join(self.out_dir, time)
+        # os.makedirs(self.out_dir)
 
     def close_spider(self, spider):
         for label in self.files:

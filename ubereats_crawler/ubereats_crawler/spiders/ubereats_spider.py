@@ -57,6 +57,15 @@ class UbereatsSpider(scrapy.Spider):
 
     def __get_all_menus_by_city_and_category(self, response, label):
         feeds = json.loads(response.text)
+        if feeds['status'] == 'failure':
+            yield {
+                'label': 'failure',
+                'data': {
+                    'url': response.request.url,
+                    'body': json.loads(response.request.body)
+                }
+            }
+            return
 
         for item in feeds["data"]["elements"][4]["feedItems"]:
             uuid = item["uuid"]
@@ -106,7 +115,7 @@ class UbereatsSpider(scrapy.Spider):
         ['/category/berkeley-ca/fast-food', 
         '/category/berkeley-ca/breakfast-and-brunch', ... ] 
         """
-        return response.xpath(XPATH_CATEGORIES).getall()
+        return response.xpath(XPATH_CATEGORIES).getall()[1:]
 
     def __get_all_store_uuids_from_script(self, response):
         """The method finds all store uuids encrypted in html script
