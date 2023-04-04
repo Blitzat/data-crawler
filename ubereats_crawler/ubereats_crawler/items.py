@@ -7,7 +7,19 @@ import scrapy
 
 
 class UbereatsCrawlerItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    city = scrapy.Field()
-    content = scrapy.Field()
+    # store uuid
+    uuid = scrapy.Field()
+    # store name
+    name = scrapy.Field()
+    # store location
+    location = scrapy.Field()
+    # store category labels
+    categories = scrapy.Field()
+    # store hours
+    hours = scrapy.Field()
+    # sections (lunch, breakfirst, dinner)
+    sections = scrapy.Field()
+    # store reviews
+    reviews = scrapy.Field()
+    # catalogSectionsMap includes all the menu informations
+    catalogSectionsMap = scrapy.Field()

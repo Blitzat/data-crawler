@@ -30,14 +30,14 @@ class UbereatsSpider(scrapy.Spider):
             yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
                                  callback=self.__get_all_menus_by_city,
                                  errback=self.__process_failed_request,
-                                 cb_kwargs={'city': f'{city}'})
+                                 cb_kwargs={'label': f'{city}'})
 
     def parse(self, response):
         raise Exception(
             "No default callback parser! Please specify callback in each scrapy request."
         )
 
-    def __get_all_menus_by_city(self, response, city):
+    def __get_all_menus_by_city(self, response, label):
         all_category_paths = self.__get_all_category_paths(response)
 
         for category in all_category_paths:
@@ -53,9 +53,9 @@ class UbereatsSpider(scrapy.Spider):
                 body=json.dumps({
                     'pathname': category,
                 }),
-                cb_kwargs={'city': city})
+                cb_kwargs={'label': label})
 
-    def __get_all_menus_by_city_and_category(self, response, city):
+    def __get_all_menus_by_city_and_category(self, response, label):
         feeds = json.loads(response.text)
 
         for item in feeds["data"]["elements"][4]["feedItems"]:
@@ -71,10 +71,20 @@ class UbereatsSpider(scrapy.Spider):
                                          'x-csrf-token': 'x',
                                      },
                                      body=json.dumps({'storeUuid': uuid}),
-                                     cb_kwargs={'city': city})
+                                     cb_kwargs={'label': label})
 
-    def __process_store_info(self, response, city):
-        yield UbereatsCrawlerItem(city=city, content="some content here")
+    def __process_store_info(self, response, label):
+        data = json.loads(response.text)['data']
+        item = UbereatsCrawlerItem(
+            uuid=data['uuid'],
+            name=data['title'],
+            location=data['location'],
+            hours=data['hours'],
+            categories=data['categories'],
+            sections=data['sections'],
+            reviews=data['storeReviews'],
+            catalogSectionsMap=data['catalogSectionsMap'])
+        yield {'label': label, 'data': item}
 
     def __process_failed_request(self, failure):
         self.log(f"Fail to request {failure.request.url}",
