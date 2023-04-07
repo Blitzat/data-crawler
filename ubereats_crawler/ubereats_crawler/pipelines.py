@@ -34,6 +34,7 @@ class UbereatsCrawlerPipeline:
 
     def close_spider(self, spider):
         for label in self.files:
+            self.files[label].write(']')
             self.files[label].close()
 
     def process_item(self, item, spider):
@@ -42,12 +43,14 @@ class UbereatsCrawlerPipeline:
         data = adapter.get('data')
         if (label is not None) and (data is not None):
             if label not in self.files:
-                file_name = os.path.join(self.out_dir, f'{label}.txt')
+                file_name = os.path.join(self.out_dir, f'{label}.json')
                 self.files[label] = open(file_name, 'a+')
+                self.files[label].write('[')
+            else:
+                self.files[label].write(',')
 
             # append each item as a json obj to the file
             json.dump(obj=dict(data), fp=self.files[label], ensure_ascii=False)
-            self.files[label].write(os.linesep)
             return item
 
         else:

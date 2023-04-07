@@ -63,7 +63,7 @@ class UbereatsSpider(scrapy.Spider):
             new_request_or_none = get_retry_request(
                 response.request,
                 spider=self,
-                priority_adjust=-5,
+                priority_adjust=0,
                 reason='Failed to get data from getSeoFeedV1 api.',
             )
             if new_request_or_none is None:
@@ -105,7 +105,7 @@ class UbereatsSpider(scrapy.Spider):
             new_request_or_none = get_retry_request(
                 response.request,
                 spider=self,
-                priority_adjust=-5,
+                priority_adjust=-1,
                 reason='Failed to get data from getStoreV1 api.',
             )
             if new_request_or_none is None:
