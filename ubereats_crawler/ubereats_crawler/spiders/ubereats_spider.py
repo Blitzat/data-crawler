@@ -5,6 +5,7 @@ import logging
 
 from pathlib import Path
 from ..items import UbereatsCrawlerItem
+from scrapy.downloadermiddlewares.retry import get_retry_request
 
 # self-defined modules
 from .constants import URL_ROOT
@@ -26,7 +27,8 @@ class UbereatsSpider(scrapy.Spider):
     def start_requests(self):
         # current dir is top level dir of the project
         city_file = open('./major_cities.txt', mode='r')
-        for city in city_file:
+        for city_ in city_file:
+            city = city_.rstrip('\n')
             yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
                                  callback=self.__get_all_menus_by_city,
                                  errback=self.__process_failed_request,
@@ -58,13 +60,24 @@ class UbereatsSpider(scrapy.Spider):
     def __get_all_menus_by_city_and_category(self, response, label):
         feeds = json.loads(response.text)
         if feeds['status'] == 'failure':
-            yield {
-                'label': 'failure',
-                'data': {
-                    'url': response.request.url,
-                    'body': json.loads(response.request.body)
+            new_request_or_none = get_retry_request(
+                response.request,
+                spider=self,
+                priority_adjust=-5,
+                reason='Failed to get data from getSeoFeedV1 api.',
+            )
+            if new_request_or_none is None:
+                yield {
+                    'label': 'failure',
+                    'data': {
+                        'url': response.request.url,
+                        'body': json.loads(response.request.body)
+                    }
                 }
-            }
+            else:
+                self.log("Failed to get data from getSeoFeedV1, retrying ... ",
+                         logging.WARN)
+                yield new_request_or_none
             return
 
         for item in feeds["data"]["elements"][4]["feedItems"]:
@@ -89,7 +102,19 @@ class UbereatsSpider(scrapy.Spider):
         res = json.loads(response.text)
 
         if res['status'] == 'failure':
-            yield {'label': 'failure', 'data': {'uuid': uuid}}
+            new_request_or_none = get_retry_request(
+                response.request,
+                spider=self,
+                priority_adjust=-5,
+                reason='Failed to get data from getStoreV1 api.',
+            )
+            if new_request_or_none is None:
+                yield {'label': 'failure', 'data': {'uuid': uuid}}
+            else:
+                self.log("Failed to get data from getStoreV1, retrying ... ",
+                         logging.WARN)
+                yield new_request_or_none
+            return
         else:
             data = res['data']
             item = UbereatsCrawlerItem(
