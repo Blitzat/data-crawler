@@ -188,4 +188,4 @@ class UbereatsCrawlerPipeline:
             upsert=True
         )
 
-        return data
+        return data["storeURL"], data["uuid"]
