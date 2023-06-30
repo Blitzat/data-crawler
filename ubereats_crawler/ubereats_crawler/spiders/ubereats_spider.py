@@ -117,6 +117,14 @@ class UbereatsSpider(scrapy.Spider):
             return
         else:
             data = res['data']
+            meta_json = data["metaJson"]
+            try:
+                meta = json.loads(meta_json)
+            except json.decoder.JSONDecodeError:
+                self.log(f"Failed to decode metaJson: {meta_json}",
+                         level=logging.WARNING)
+                meta = {}
+            storeURL = meta.get("@id")
             item = UbereatsCrawlerItem(
                 uuid=data['uuid'],
                 name=data['title'],
@@ -125,7 +133,8 @@ class UbereatsSpider(scrapy.Spider):
                 categories=data['categories'],
                 sections=data['sections'],
                 reviews=data['storeReviews'],
-                catalogSectionsMap=data['catalogSectionsMap'])
+                catalogSectionsMap=data['catalogSectionsMap'],
+                storeURL=storeURL)
             yield {'label': label, 'data': item}
 
     def __process_failed_request(self, failure):
@@ -135,7 +144,7 @@ class UbereatsSpider(scrapy.Spider):
     def __get_all_category_paths(self, response):
         """The method returns a list of url paths of all categories scawled
         from 'https://www.ubereats.com/city/{city_name}-{state_postal_abbr}'.
-        
+
         Example return is 
         ['/category/berkeley-ca/fast-food', 
         '/category/berkeley-ca/breakfast-and-brunch', ... ] 

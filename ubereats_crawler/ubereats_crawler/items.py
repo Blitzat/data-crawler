@@ -23,3 +23,5 @@ class UbereatsCrawlerItem(scrapy.Item):
     reviews = scrapy.Field()
     # catalogSectionsMap includes all the menu informations
     catalogSectionsMap = scrapy.Field()
+    # Store url
+    storeURL = scrapy.Field()
