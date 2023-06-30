@@ -2,6 +2,7 @@ import scrapy
 import json
 import re
 import logging
+import time
 
 from pathlib import Path
 from ..items import UbereatsCrawlerItem
@@ -134,7 +135,8 @@ class UbereatsSpider(scrapy.Spider):
                 sections=data['sections'],
                 reviews=data['storeReviews'],
                 catalogSectionsMap=data['catalogSectionsMap'],
-                storeURL=storeURL)
+                storeURL=storeURL,
+                crawlTime=time.time())
             yield {'label': label, 'data': item}
 
     def __process_failed_request(self, failure):

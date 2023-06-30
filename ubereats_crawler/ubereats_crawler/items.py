@@ -25,3 +25,5 @@ class UbereatsCrawlerItem(scrapy.Item):
     catalogSectionsMap = scrapy.Field()
     # Store url
     storeURL = scrapy.Field()
+    # crwal time
+    crawlTime = scrapy.Field()
