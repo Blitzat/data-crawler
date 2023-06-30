@@ -17,3 +17,20 @@ XPATH_RESTAURANTS = "//*[@id='main-content']/div[4]/div[1]//@href"
 
 # find script that includes all url
 XPATH_UUID_SCRIPT = "//*[@id='__REDUX_STATE__']/text()"
+
+# allowed states
+ALLOWED_STATES = [
+    "MA",
+    "RI",
+    "CT",
+    "NY",
+    "NJ",
+    "PA",
+    "DE",
+    "MD",
+    "DC",
+    "VA",
+    "NC",
+    "SC",
+    "GA",
+]

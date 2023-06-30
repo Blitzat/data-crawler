@@ -14,6 +14,7 @@ from .constants import URL_GET_SEO_FEED
 from .constants import URL_GET_STORE_INFO
 from .constants import XPATH_CATEGORIES
 from .constants import XPATH_UUID_SCRIPT
+from .constants import ALLOWED_STATES
 
 
 class UbereatsSpider(scrapy.Spider):
@@ -38,6 +39,10 @@ class UbereatsSpider(scrapy.Spider):
         with open("./all-cities.json") as f:
             cities = json.load(f)
             for city in cities:
+                state = city.split("-")[-1].upper()
+                if not state in ALLOWED_STATES:
+                    self.logger.info(f"Skipping {city} because it is not in allowed states.")
+                    continue
                 yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
                                      callback=self.__get_all_menus_by_city,
                                      errback=self.__process_failed_request,
