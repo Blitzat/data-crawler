@@ -7,9 +7,11 @@
 import os
 import uuid
 import pymongo
+import logging
 
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
+
 
 class RestaurantDocumentTransformer:
 
@@ -20,6 +22,7 @@ class RestaurantDocumentTransformer:
         assert self.data, 'RestaurantDocumentTransformer: No data to transform.'
         for data in self.data:
             yield data
+
 
 class RestaurantDocumentIdentityTransformer(RestaurantDocumentTransformer):
 
@@ -72,7 +75,8 @@ class RestaurantItemFlattenTransformer(RestaurantDocumentTransformer):
             menus = restaurant.get('catalogSectionsMap', {})
             for menu in menus.values():
                 for section in menu:
-                    items = section.get("payload", {}).get("standardItemsPayload", {}).get("catalogItems", [])
+                    items = section.get("payload", {}).get(
+                        "standardItemsPayload", {}).get("catalogItems", [])
                     for item in items:
                         item_id = item['uuid']
                         item_name = item['title']
@@ -90,6 +94,7 @@ class RestaurantItemFlattenTransformer(RestaurantDocumentTransformer):
                             item_image_url,
                         ]
 
+
 class RestaurantDocumentToPrompt(RestaurantDocumentTransformer):
 
     def __init__(self, data):
@@ -97,6 +102,7 @@ class RestaurantDocumentToPrompt(RestaurantDocumentTransformer):
 
     def __iter__(self):
         raise NotImplementedError("Not implemented yet")
+
 
 class RestaurantLocator:
 
@@ -124,14 +130,20 @@ class RestaurantLocator:
 
         return ret
 
+
 class UbereatsCrawlerPipeline:
 
     def __init__(self):
-        self._client = pymongo.MongoClient(
-            os.environ.get('MONGODB_URI')
-        )
-        self._db = self._client[os.environ.get('MONGODB_DB')]
-        self._collection = self._db[os.environ.get('MONGODB_COLLECTION')]
+        if os.environ.get('MONGODB_URI'):
+            self._dry_run = False
+            self._client = pymongo.MongoClient(
+                os.environ.get('MONGODB_URI')
+            )
+            self._db = self._client[os.environ.get('MONGODB_DB')]
+            self._collection = self._db[os.environ.get('MONGODB_COLLECTION')]
+        else:
+            self._dry_run = True
+        logging.info(f'Pipeline dry run: {self._dry_run}')
 
     def close_spider(self, spider):
         self._collection.create_index([('geo', pymongo.GEOSPHERE)])
@@ -139,11 +151,16 @@ class UbereatsCrawlerPipeline:
     def process_item(self, item, spider):
         adapter = ItemAdapter(item)
         label = adapter.get('label')
-        data = adapter.get('data')
-        if (label is None) or (data is None):
+        data_ = adapter.get('data')
+        if (label is None) or (data_ is None):
             raise DropItem('No label and data found in item.')
-
+        
+        data = dict(data_)
         data['label'] = label
+
+        if self._dry_run:
+            logging.info(f'Dry run: {data}')
+            return
 
         # create index.
         data["_id"] = data["uuid"]
@@ -170,3 +187,5 @@ class UbereatsCrawlerPipeline:
             {'$set': data},
             upsert=True
         )
+
+        return data

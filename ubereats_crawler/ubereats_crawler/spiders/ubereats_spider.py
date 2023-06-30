@@ -27,13 +27,21 @@ class UbereatsSpider(scrapy.Spider):
 
     def start_requests(self):
         # current dir is top level dir of the project
-        city_file = open('./major_cities.txt', mode='r')
-        for city_ in city_file:
-            city = city_.rstrip('\n')
-            yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
-                                 callback=self.__get_all_menus_by_city,
-                                 errback=self.__process_failed_request,
-                                 cb_kwargs={'label': f'{city}'})
+        # city_file = open('./major_cities.txt', mode='r')
+        # for city_ in city_file:
+        #     city = city_.rstrip('\n')
+        #     yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
+        #                          callback=self.__get_all_menus_by_city,
+        #                          errback=self.__process_failed_request,
+        #                          cb_kwargs={'label': f'{city}'})
+
+        with open("./all-cities.json") as f:
+            cities = json.load(f)
+            for city in cities:
+                yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
+                                     callback=self.__get_all_menus_by_city,
+                                     errback=self.__process_failed_request,
+                                     cb_kwargs={'label': f'{city}'})
 
     def parse(self, response):
         raise Exception(
