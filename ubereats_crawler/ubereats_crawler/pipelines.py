@@ -8,6 +8,9 @@ import os
 import uuid
 import pymongo
 import logging
+import pandas as pd
+import torch
+import clip
 
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
@@ -130,6 +133,51 @@ class RestaurantLocator:
 
         return ret
 
+class EmbeddingsGenerator:
+
+    def __init__(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model, self.preprocess = clip.load("ViT-B/32", device=self.device )
+
+    def get_embeddings(self, df):
+        '''
+        generate embeddings from text or image data
+        '''
+        item_names = df.item_name
+        item_descriptions = df.item_description
+
+        # keep only the first 20 words
+        item_texts = item_names.combine(item_descriptions, lambda a, b: (a + " made by " + b).split()[:20] if pd.notna(b) else a)
+        item_texts = item_texts.apply(lambda x: ' '.join(x)).tolist()
+        if self.device  == "cuda":
+            text_tokens = clip.tokenize(item_texts, truncate=True).cuda()
+        else:
+            text_tokens = clip.tokenize(item_texts, truncate=True)
+        text_embeddings = self.encode(text_tokens)
+        return text_embeddings
+    
+    def encode(self, data, is_image=False):
+        
+        with torch.no_grad():
+            batch_size = 1000
+            sum_embeddings = []
+            N = data.shape[0]
+
+            for i in range(0, N, batch_size):
+                if i + batch_size > N:
+                    batch = data[i : N]
+                else:
+                    batch = data[i : i + batch_size]
+
+                if is_image:
+                    sum_embeddings = sum_embeddings + [self.model.encode_image(batch).float()]
+                else:
+                    sum_embeddings = sum_embeddings + [self.model.encode_text(batch).float()]
+        
+        embeddings = torch.cat(sum_embeddings, dim= 0)
+        embeddings /= embeddings.norm(dim=-1, keepdim=True)
+
+        return embeddings
 
 class UbereatsCrawlerPipeline:
 
@@ -180,7 +228,14 @@ class UbereatsCrawlerPipeline:
             }
 
         # create embbeding.
-        # TODO:
+        # TODO: create embedding for the item.
+
+        result = RestaurantItemFlattenTransformer(data)
+        restaurants_df = pd.DataFrame(data=result, columns=result.cols)
+        embeddings_generator = EmbeddingsGenerator()  # Create an instance of Embeddings_generator
+        text_embeddings = embeddings_generator.get_embeddings(restaurants_df) 
+        restaurants_df['text_embeddings'] = text_embeddings.tolist()
+        
 
         self._collection.update_one(
             {'_id': data['_id']},
