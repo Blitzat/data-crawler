@@ -1,2 +1,7 @@
 scrapy
 pymongo
+torch
+torchvision
+ftfy
+pandas
+git+https://github.com/openai/CLIP.git

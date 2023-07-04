@@ -8,6 +8,9 @@ import os
 import uuid
 import pymongo
 import logging
+import pandas as pd
+import torch
+import clip
 
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
@@ -130,10 +133,56 @@ class RestaurantLocator:
 
         return ret
 
+class EmbeddingsGenerator:
+
+    def __init__(self, df, model):
+        self.model = model
+        self.text_embeddings = self.get_embeddings(df)
+        '''
+        generate embeddings from text or image data
+        '''
+    def get_embeddings(self, df):
+        item_names = df.item_name
+        item_descriptions = df.item_description
+
+        # keep only the first 20 words
+        item_texts = item_names.combine(item_descriptions, lambda a, b: (a + " made by " + b).split()[:20] if pd.notna(b) else a)
+        item_texts = item_texts.apply(lambda x: ' '.join(x)).tolist()
+        if self.device  == "cuda":
+            text_tokens = clip.tokenize(item_texts, truncate=True).cuda()
+        else:
+            text_tokens = clip.tokenize(item_texts, truncate=True)
+        text_embeddings = self.encode(text_tokens)
+        return text_embeddings
+    
+    def encode(self, data, batch_size = 1000, is_image=False):
+        
+        with torch.no_grad():
+            
+            sum_embeddings = []
+            N = data.shape[0]
+            batch_size = batch_size
+            for i in range(0, N, batch_size):
+                if i + batch_size > N:
+                    batch = data[i : N]
+                else:
+                    batch = data[i : i + batch_size]
+
+                if is_image:
+                    sum_embeddings = sum_embeddings + [self.model.encode_image(batch).float()]
+                else:
+                    sum_embeddings = sum_embeddings + [self.model.encode_text(batch).float()]
+        
+        embeddings = torch.cat(sum_embeddings, dim= 0)
+        embeddings /= embeddings.norm(dim=-1, keepdim=True)
+
+        return embeddings
 
 class UbereatsCrawlerPipeline:
 
     def __init__(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
         if os.environ.get('MONGODB_URI'):
             self._dry_run = False
             self._client = pymongo.MongoClient(
@@ -180,7 +229,24 @@ class UbereatsCrawlerPipeline:
             }
 
         # create embbeding.
-        # TODO:
+        result = RestaurantItemFlattenTransformer([data,])
+        col_names = result.cols()
+        restaurants_df = pd.DataFrame(data=result, columns=col_names)
+        text_embeddings = EmbeddingsGenerator(restaurants_df, self.model).text_embeddings  # get the embeddings for the item
+        restaurants_df['text_embeddings'] = text_embeddings.tolist()
+
+        # assgin embedding to each corresponding item
+        menus = data.get('catalogSectionsMap', {})
+        for menu in menus.values():
+            for section in menu:
+                items = section.get("payload", {}).get(
+                    "standardItemsPayload", {}).get("catalogItems", [])
+                for item in items:
+                    item_id = item['uuid']
+                    item_embedding = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings'][0]
+                    item['text_embedding'] = item_embedding
+
+
 
         self._collection.update_one(
             {'_id': data['_id']},
@@ -189,3 +255,4 @@ class UbereatsCrawlerPipeline:
         )
 
         return data["storeURL"], data["uuid"]
+
