@@ -15,10 +15,6 @@ import clip
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
 
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv('test.env')
 
 class RestaurantDocumentTransformer:
 
