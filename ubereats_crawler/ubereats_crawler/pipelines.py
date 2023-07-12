@@ -8,6 +8,7 @@ import os
 import uuid
 import pymongo
 import logging
+import requests
 import pandas as pd
 import torch
 import clip
@@ -177,12 +178,43 @@ class EmbeddingsGenerator:
         embeddings /= embeddings.norm(dim=-1, keepdim=True)
 
         return embeddings
+    
+
+class ArzueGeoEncoder:
+
+    def __init__(self):
+        self._session = requests.Session()
+        self._api_key = os.environ.get('ARZUE_MAPS_API_KEY')
+        assert self._api_key, 'ArzueGeoEncoder: No API key provided.'
+
+    def __call__(self, address, country="US"):
+        param = {
+            "api-version": "1.0",
+            "query": address,
+            "countrySet": country,
+            "subscription-key": self._api_key,
+        }
+        endpoint = "https://atlas.microsoft.com/search/address/json"
+        try:
+            response = self._session.get(endpoint, params=param)
+            response.raise_for_status()
+            data = response.json()
+            if data['summary']['totalResults'] == 0:
+                logging.warning(f'ArzueGeoEncoder: No results found for {address}')
+                return 0, 0
+            else:
+                return data['results'][0]['position']['lat'], data['results'][0]['position']['lon']
+        except Exception as e:
+            logging.error(f'ArzueGeoEncoder: {e}')
+            return 0, 0
+
 
 class UbereatsCrawlerPipeline:
 
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
+        self.geo_encoder = ArzueGeoEncoder()
         if os.environ.get('MONGODB_URI'):
             self._dry_run = False
             self._client = pymongo.MongoClient(
@@ -212,7 +244,6 @@ class UbereatsCrawlerPipeline:
             return
 
         # create index.
-        data["_id"] = data["uuid"]
         try:
             data['_id'] = data['uuid']
         except KeyError:
@@ -225,7 +256,9 @@ class UbereatsCrawlerPipeline:
         except KeyError:
             data['geo'] = {
                 'type': 'Point',
-                'coordinates': [0, 0]
+                'coordinates': self.geo_encoder(
+                    data['location']['address']
+                )
             }
 
         # create embbeding.
