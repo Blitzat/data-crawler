@@ -137,6 +137,7 @@ class RestaurantLocator:
 class EmbeddingsGenerator:
 
     def __init__(self, df, model):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = model
         self.text_embeddings = self.get_embeddings(df)
         '''
@@ -276,8 +277,10 @@ class UbereatsCrawlerPipeline:
                     "standardItemsPayload", {}).get("catalogItems", [])
                 for item in items:
                     item_id = item['uuid']
-                    item_embedding = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings'][0]
-                    item['text_embedding'] = item_embedding
+                    # print(restaurants_df)
+                    # print(restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings'])
+                    item_embedding = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings']
+                    item['text_embedding'] = list(item_embedding)
 
 
 
