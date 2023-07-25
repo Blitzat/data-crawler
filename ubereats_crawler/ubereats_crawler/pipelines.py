@@ -277,11 +277,9 @@ class UbereatsCrawlerPipeline:
                     "standardItemsPayload", {}).get("catalogItems", [])
                 for item in items:
                     item_id = item['uuid']
-                    # print(restaurants_df)
-                    # print(restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings'])
-                    item_embedding = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings']
-                    item['text_embedding'] = list(item_embedding)
-
+                    item_embedding_series = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings']
+                    item_embedding = list(item_embedding_series)[0]
+                    item['text_embedding'] = item_embedding
 
 
         self._collection.update_one(
