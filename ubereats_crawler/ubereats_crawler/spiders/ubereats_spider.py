@@ -3,6 +3,7 @@ import json
 import re
 import logging
 import time
+import random
 
 from pathlib import Path
 from ..items import UbereatsCrawlerItem
@@ -38,6 +39,7 @@ class UbereatsSpider(scrapy.Spider):
 
         with open("./all-cities.json") as f:
             cities = json.load(f)
+            random.shuffle(cities)
             for city in cities:
                 state = city.split("-")[-1].upper()
                 if not state in ALLOWED_STATES:

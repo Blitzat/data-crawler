@@ -12,10 +12,18 @@ import requests
 import pandas as pd
 import torch
 import clip
+import pickle
+import zlib
 
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
 
+
+def compress_embedding_weights(weights):
+    return zlib.compress(pickle.dumps(weights))
+
+def decompress_embedding_weights(weights):
+    return pickle.loads(zlib.decompress(weights))
 
 class RestaurantDocumentTransformer:
 
@@ -279,7 +287,7 @@ class UbereatsCrawlerPipeline:
                     item_id = item['uuid']
                     item_embedding_series = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings']
                     item_embedding = list(item_embedding_series)[0]
-                    item['text_embedding'] = item_embedding
+                    item['text_embedding'] = compress_embedding_weights(item_embedding)
 
 
         self._collection.update_one(
