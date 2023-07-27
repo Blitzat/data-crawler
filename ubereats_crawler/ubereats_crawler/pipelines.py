@@ -272,6 +272,7 @@ class UbereatsCrawlerPipeline:
             last_item_age = time.time() - last_item.get("crawlTime", 0)
             logging.info(f"Skipping {data['name']} ({data['uuid']}) because it is still fresh {last_item_age}...")
             return None
+        # REF: https://github.com/Blitzat/data-crawler/issues/11
         if last_item and (last_item.get("label") != data.get("label")):
             logging.info(f"Skipping {data['name']} ({data['uuid']}) from {label} because it has a different label...")
             return None
