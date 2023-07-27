@@ -14,6 +14,7 @@ import torch
 import clip
 import pickle
 import zlib
+import time
 
 from scrapy.exceptions import DropItem
 from itemadapter import ItemAdapter
@@ -231,6 +232,7 @@ class UbereatsCrawlerPipeline:
             )
             self._db = self._client[os.environ.get('MONGODB_DB')]
             self._collection = self._db[os.environ.get('MONGODB_COLLECTION')]
+            logging.info(f'Pipeline connected to {os.environ.get("MONGODB_URI")}')
         else:
             self._dry_run = True
         logging.info(f'Pipeline dry run: {self._dry_run}')
@@ -257,25 +259,48 @@ class UbereatsCrawlerPipeline:
             data['_id'] = data['uuid']
         except KeyError:
             data['_id'] = data['uuid'] = uuid.uuid4()
+
+        logging.info(f'Processing {data["name"]} ({data["uuid"]})...')
+
+        # find item with the same uuid
+        last_item = self._collection.find_one({'_id': data['_id']})
+        # condition of reindexing:
+        # 1. the item is not in the collection
+        # 2. It has been 7 days since the last update
+        # 3. The item has the same label as the one in the collection
+        if last_item and (time.time() - last_item.get("crawlTime", 0) < 7 * 24 * 60 * 60):
+            last_item_age = time.time() - last_item.get("crawlTime", 0)
+            logging.info(f"Skipping {data['name']} ({data['uuid']}) because it is still fresh {last_item_age}...")
+            return None
+        if last_item and (last_item.get("label") != data.get("label")):
+            logging.info(f"Skipping {data['name']} ({data['uuid']}) from {label} because it has a different label...")
+            return None
+
         try:
             data['geo'] = {
                 'type': 'Point',
                 'coordinates': [data['location']['longitude'], data['location']['latitude']]
             }
         except KeyError:
+            logging.warning(f'No location found for {data["name"]} @ {data.get("location", {}).get("address")}')
             data['geo'] = {
                 'type': 'Point',
                 'coordinates': self.geo_encoder(
-                    data['location']['address']
+                    data.get("location", {}).get("address")
                 )
             }
 
+        logging.info(f"{data['name']} @ {data['location']['address']} is at {data['geo']['coordinates']}")
+
+        logging.info("Creating embedding...")
+        index_start = time.time()
         # create embbeding.
         result = RestaurantItemFlattenTransformer([data,])
         col_names = result.cols()
         restaurants_df = pd.DataFrame(data=result, columns=col_names)
         text_embeddings = EmbeddingsGenerator(restaurants_df, self.model).text_embeddings  # get the embeddings for the item
         restaurants_df['text_embeddings'] = text_embeddings.tolist()
+        logging.info(f"Index created in {time.time() - index_start} seconds for {len(text_embeddings)} items, {len(text_embeddings) / (time.time() - index_start)} items indexed per sec.")
 
         # assgin embedding to each corresponding item
         menus = data.get('catalogSectionsMap', {})
@@ -287,14 +312,22 @@ class UbereatsCrawlerPipeline:
                     item_id = item['uuid']
                     item_embedding_series = restaurants_df.loc[restaurants_df['item_id'] == item_id, 'text_embeddings']
                     item_embedding = list(item_embedding_series)[0]
-                    item['text_embedding'] = compress_embedding_weights(item_embedding)
+                    compressed_embedding = compress_embedding_weights(item_embedding)
+                    # logging.info(f"Assigning embedding to {item['title']} with length {len(compressed_embedding)}...")
+                    item['text_embedding'] = compressed_embedding
 
 
-        self._collection.update_one(
+        try:
+            self._collection.update_one(
             {'_id': data['_id']},
             {'$set': data},
             upsert=True
-        )
+            )
+        except Exception as e:
+            logging.error(f'Pipeline: {type(e)}: {e}')
+            logging.exception(e)
+            # raise DropItem(f'Pipeline: {type(e)}: {e}')
+            return None
 
-        return data["storeURL"], data["uuid"]
+        return data["storeURL"], data["uuid"], label
 
