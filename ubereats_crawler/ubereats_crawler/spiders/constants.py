@@ -33,4 +33,11 @@ ALLOWED_STATES = [
     "NC",
     "SC",
     "GA",
+    # here comes the west coast
+    "WA",
+    "OR",
+    "CA",
+    "NV",
+    "AZ",
+    "UT",
 ]
