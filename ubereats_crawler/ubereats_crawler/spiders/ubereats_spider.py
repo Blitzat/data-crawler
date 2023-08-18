@@ -40,11 +40,11 @@ class UbereatsSpider(scrapy.Spider):
         with open("./all-cities.json") as f:
             cities = json.load(f)
             random.shuffle(cities)
-            for city in cities:
-                state = city.split("-")[-1].upper()
-                if not state in ALLOWED_STATES:
-                    self.logger.info(f"Skipping {city} because it is not in allowed states.")
-                    continue
+            for city in cities[:32]:
+                # state = city.split("-")[-1].upper()
+                # if not state in ALLOWED_STATES:
+                #     self.logger.info(f"Skipping {city} because it is not in allowed states.")
+                #     continue
                 yield scrapy.Request(url=f'{URL_ROOT}/city/{city}',
                                      callback=self.__get_all_menus_by_city,
                                      errback=self.__process_failed_request,
